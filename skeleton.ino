@@ -1,16 +1,30 @@
 //Globals, things that cannot be stored locally. Might change when refactoring or when passing params is too slow.
 unsigned long lastPoll;
 short mode; //Which setting to change with a valid range between 0 and 2. Pls no negatives thx.
+int northMax;
+int eastMax;
+int southMax;
+int westMax;
 
 //Constants, things that don't change during execution
 const short pollTime = 100; //Polltime in milliseconds with a valid range between 0 and 32,767. Don't go over and don't go negative pls, thanks.
 const short modes = 3; //The number of settings we can change. 
 
 //Pin assignments
+const int northMic = A0;
+const int eastMic = A1;
+const int southMic = A2;
+const int westMic = A3;
 
 void setup(){
     //Code to initialise rotary encoder
+
     //Code to initialise mics
+    pinMode(northMic, INPUT);
+    pinMode(eastMic, INPUT);
+    pinMode(southMic, INPUT);
+    pinMode(westMic, INPUT);
+
     //Code to initialise display
 
     Serial.begin(9600);
@@ -23,9 +37,10 @@ void setup(){
 void loop() {
     unsigned long time = millis();
 
+    //Get data from mics
+    getMicData();
+
     if (lastPoll + pollTime < time){
-        //Get data from mics
-        getMicData();
         //Determine direction
         int dir = calculateDirection();
         //Determine volume (if it cannot be read out trivially)
@@ -53,7 +68,26 @@ boolean changeDetected(){
 }
 
 void getMicData() {
-    //Read the data from the mics
+    int north = analogRead(northMic);
+    int south = analogRead(southMic);
+    int east = analogRead(eastMic);
+    int west = analogRead(westMic);
+
+    if (north > northMax) {
+        northMax = north;
+    }
+
+    if (south > southMax) {
+        southMax = south;
+    }
+
+    if (east > eastMax) {
+        eastMax = east;
+    }
+
+    if (west > westMax) {
+        westMax = west;
+    }
 }
 
 int calculateDirection() {
