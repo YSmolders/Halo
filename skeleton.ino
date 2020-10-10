@@ -220,7 +220,7 @@ void getMicData() {
     if (north > northMax && north > noise) {
         northMax = north;
     }
-    
+
     if (south > southMax && south > noise) {
         southMax = south;
     }
@@ -232,6 +232,13 @@ void getMicData() {
     if (west > westMax && west > noise) {
         westMax = west;
     }
+}
+
+void resetMicData(){
+    northMax = 0;
+    eastMax = 0;
+    southMax = 0;
+    westMax = 0;
 }
 
 void resetMicData(){
@@ -270,8 +277,7 @@ int calculateDirection() {
 }
 
 void changeLED(int dir) {
-    //Assuming LEDs are connected per direction, so 0 1 2 are the north facing LEDs, 3 4 5 the north east facing LEDs, etc.
-    
+    //Assuming LEDs are connected per direction, so 0 1 2 are the north facing LEDs, 3 4 5 the north east facing LEDs, etc.  
     int max = 0;
 
     switch (dir) {
@@ -296,6 +302,12 @@ void changeLED(int dir) {
         } else {
             max = eastMax;
         }
+        
+        if (northMax > eastMax) {
+            max = northMax;
+        } else {
+            max = eastMax;
+        }
 
         break;
 
@@ -304,6 +316,8 @@ void changeLED(int dir) {
             leds[centralLed] = CRGB(255, 0, 0);
             loudDetectTime = millis();
         }
+        
+        max = eastMax;
 
         max = eastMax;
 
@@ -313,6 +327,12 @@ void changeLED(int dir) {
         if (eastMax > (upperBound + 255) || southMax > (upperBound + 255)) {
             leds[centralLed] = CRGB(255, 0, 0);
             loudDetectTime = millis();
+        }
+        
+        if (southMax > eastMax) {
+            max = southMax;
+        } else {
+            max = eastMax;
         }
         
         if (southMax > eastMax) {
@@ -344,6 +364,12 @@ void changeLED(int dir) {
         } else {
             max = westMax;
         }
+        
+        if (southMax > westMax) {
+            max = southMax;
+        } else {
+            max = westMax;
+        }
 
         break;
 
@@ -368,6 +394,12 @@ void changeLED(int dir) {
         } else {
             max = westMax;
         }
+        
+        if (northMax > westMax) {
+            max = northMax;
+        } else {
+            max = westMax;
+        }
 
         break;
     
@@ -375,6 +407,7 @@ void changeLED(int dir) {
         break;
     }
 
+<<<<<<< HEAD
     if (leds[centralLed] == CRGB(255, 0, 0) && abs(time - loudDetectTime) > (onTime * 1000)) {
         leds[centralLed] = CRGB(0, 0, 0);
     }
@@ -458,7 +491,7 @@ void checkRotation() {
 }
 
 void increase() {
-    writeTime = millis();
+    writeTime = wTime + millis();
     switch(mode) {
         case 0:
             if (lowerBound != 254) {
@@ -494,6 +527,7 @@ void decrease() {
             if (lowerBound != 0) {
                 lowerBound--;
                 settingChanged = mode;
+                Serial.println(lowerBound);
             }
 
             break;
