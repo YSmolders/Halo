@@ -1,9 +1,9 @@
 #include <EEPROM.h>
-#include <FastLED.h>
+#include <Adafruit_NeoPixel.h>
 #include <hd44780.h>
 #include <hd44780ioClass/hd44780_pinIO.h>
 
-//Default memory usage: 112 bytes + the two classes.
+#define NUM_DIR 8
 
 //Globals, things that cannot be stored locally. Might change when refactoring or when passing params is too slow.
 //Time stuff
@@ -12,21 +12,24 @@ unsigned long lastDisPoll;
 unsigned long time; //Current time
 unsigned long rotCWTime; //Last CW rotation detected time
 unsigned long rotCCWTime; //Last CCW rotation detected time
+unsigned long detectTime; //Last time we detected sound and output it
 unsigned long writeTime; //Time at which we detected that we want to write the settings to memory
-unsigned long pushTime; //Time when we last detected that the button was pushed.
-
-//Time stuff for the directions, records the last time we detected sound coming from that direction
-unsigned long turnedOnTime[8]; //When the lights for that direction turned on
-unsigned long loudDetectTime; //Last time since we detected a loud sound, used for turning off the loud sound indicator after x seconds (new setting?)
+unsigned long pushTime;
+unsigned long lastLEDRefresh;
+unsigned long ledRefreshRate = 50;
 
 byte mode; //Which setting to change with a valid range between 0 and modes - 1. Pls no negatives thx.
 int northMax; //Max amplitude detected by the north mic
 int eastMax; //Max amplitude detected by the east mic
 int southMax; //Max amplitude detected by the south mic
 int westMax; //Max amplitude detected by the west mic
+int firstLED[NUM_DIR];
+int secondLED[NUM_DIR];
+int thirdLED[NUM_DIR];
 bool buttonPushed;
-byte settingChanged; //Whether (and which) setting has changed. Default value 255, if anything different then nothing has changed
-const byte noise = 145; //The value gotten from the mics that we consider noise
+byte lastDir; //Last direction that we output
+bool settingChanged; //Whether (and which) setting has changed. Default value 255, if anything different then nothing has changed
+const byte noise = 145; //the amount which we say is the very minimun of an actual sound input
 
 //Settings stuff
 byte lowerBound; //The threshold of sounds that we consider to be a sound as opposed to noise. Varies from 0 to 254.
@@ -36,17 +39,14 @@ byte soundLength; //In seconds, ranging from 0 to 255
 //Constants, things that don't change during execution
 const short pollTime = 100; //Polltime in milliseconds (ms) with a valid range between 0 and 32,767. Don't go over and don't go negative pls, thanks.
 const short disPollTime = 400; //Time between display updates in ms with a valid range between 0 and 32,767. Don't go over and don't go negative pls, thanks.
-const short wTime = 2000; //Time needed to wait until we want to write something to memory in ms. Valid values range between 0 and 32,767
-const byte onTime = 1; //How long we leave a LED on after it has last detected a sound in seconds. Valid range from 1 to 255
-
+const int wTime = 60000; //Time needed to wait until we want to write something to memory in ms. Valid values range between 0 and 255
 const byte modes = 3; //The number of settings we can change. May not be larger than 255  though so many settings don't fit in memory either. 
 const byte sensLowerBound = 3; //Address where lower sensitivity bound is stored
 const byte sensUpperBound = 4; //Address where upper sensitivity bound is stored
 const byte soundLengthAdress = 5; //Address where length of sound is stored
-
 const byte maxVolDiff = 75; //Maximum difference between two volumes such that they are both considered as loud sounds
 const byte NUMLED = 5; //Amount of LEDs we have
-const byte centralLed = 4; //Index of the LED in the middle
+const byte centralLed = 4;
 
 //Pin assignments
 const byte northMic = A0;
@@ -67,8 +67,8 @@ const int d7PinDisplay = 7;
 
 const byte ledPin = 5;
 
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMLED, ledPin, NEO_GRB + NEO_KHZ800); //Class needed for the LED strip to work
 hd44780_pinIO lcd(rsPinDisplay, ePinDisplay, d4PinDisplay, d5PinDisplay, d6PinDisplay, d7PinDisplay); //Class needed for the Display to work
-CRGB leds[NUMLED];
 
 void setup(){
     //Read values from memory
@@ -77,7 +77,7 @@ void setup(){
     soundLength = EEPROM.read(soundLengthAdress);
   
     if (lowerBound == 255) {
-        lowerBound = 0;
+        lowerBound = noise;
     }
   
     if (upperBound == 255) {
@@ -104,7 +104,8 @@ void setup(){
 
     //Code to initialise LEDs
     //pinMode(ledPin, OUTPUT);
-    FastLED.addLeds<WS2812, ledPin, GRB>(leds, NUMLED);
+    strip.begin(); //Initialise LED strip
+    strip.show(); //Turn off all LEDs
 
     //Needed to communicate with pc
     Serial.begin(9600);
@@ -123,13 +124,10 @@ void setup(){
     rotCWTime = 0;
     rotCCWTime = 0;
     pushTime = 0;
-    settingChanged = 255;
-
-  	for (int i = 0; i < sizeof(turnedOnTime); i++) {
-        turnedOnTime[i] = 0;
-    }
-
-    loudDetectTime = 0;
+    lastDir = 255;
+    settingChanged = false;
+  
+  	lastLEDRefresh = 0;
   
     attachInterrupt(digitalPinToInterrupt(buttonPin), changeMode, FALLING);
     attachInterrupt(digitalPinToInterrupt(rotPinA), checkRotation, FALLING);
@@ -145,11 +143,17 @@ void loop() {
         int dir = calculateDirection();
 
         //Change LEDs
-        changeLED(dir);
+      	setLED(dir);
 
         resetMicData();
 
         lastPoll  = millis() ;
+    }
+
+    unsigned long LEDDiff = time - lastLEDRefresh;
+  	if (abs(LEDDiff) > ledRefreshRate){
+    	changeLED();
+    	lastLEDRefresh = millis();
     }
 
     if (buttonPushed) {
@@ -157,28 +161,16 @@ void loop() {
         changeMode();
     }
 
-    if (settingChanged != 255 && abs(time - writeTime) > wTime) {
-        switch (settingChanged) {
-        case 0:
-            EEPROM.write(sensLowerBound, lowerBound);
-
-            break;
-
-        case 1:
-            EEPROM.write(sensUpperBound, upperBound);
-
-            break;
-
-        case 2:
-            EEPROM.write(soundLengthAdress, soundLength);
-
-            break;
-        }
-
-        settingChanged = 255; //Reset to nothing has changed
+    unsigned long writeDiff = time - writeTime;
+    if (settingChanged && abs(writeDiff) > wTime) {
+        EEPROM.update(sensLowerBound, lowerBound);
+      	EEPROM.update(sensUpperBound, upperBound);
+      	EEPROM.update(soundLengthAdress, soundLength);
+        settingChanged = false;
     }
     
-    if (abs(time - lastDisPoll) > disPollTime) {
+    unsigned long disDiff = time - lastDisPoll;
+    if (abs(disDiff) > disPollTime) {
         updateDisplay();
         lastDisPoll = millis();
     }
@@ -212,33 +204,31 @@ void updateDisplay() {
 
 void getMicData() {
     int avg = 512;
-    int north = abs(analogRead(northMic) - avg);
-    int south = abs(analogRead(southMic) - avg);
-    int east = abs(analogRead(eastMic) - avg);
-    int west = abs(analogRead(westMic)- avg);
 
-    if (north > northMax && north > noise) {
+  	int northRaw = analogRead(northMic) - avg;
+  	int southRaw = analogRead(southMic) - avg;
+  	int eastRaw = analogRead(eastMic) - avg;
+  	int westRaw = analogRead(westMic)- avg;
+    
+    int north = abs(northRaw);
+    //int south = abs(southRaw);
+    //int east = abs(eastRaw);
+    //int west = abs(westRaw);
+
+    if (north > northMax && north > lowerBound) {
         northMax = north;
     }
-
-    if (south > southMax && south > noise) {
+    /*
+    if (south > southMax && south > lowerBound) {
         southMax = south;
     }
-
-    if (east > eastMax && east > noise) {
+    if (east > eastMax && east > lowerBound) {
         eastMax = east;
     }
-
-    if (west > westMax && west > noise) {
+    if (west > westMax && west > lowerBound) {
         westMax = west;
     }
-}
-
-void resetMicData(){
-    northMax = 0;
-    eastMax = 0;
-    southMax = 0;
-    westMax = 0;
+    */
 }
 
 void resetMicData(){
@@ -250,10 +240,15 @@ void resetMicData(){
 
 int calculateDirection() {
     //Calculate the direction given the data from the mics, outpute a value between 0 (north) and 7 (north west), following the compass in the N, E, S, W order
-    int neDiff = abs(northMax - eastMax);
-    int nwDiff = abs(northMax - westMax);
-    int seDiff = abs(southMax - eastMax);
-    int swDiff = abs(southMax - westMax);
+    int ne = northMax - eastMax;
+    int nw = northMax - westMax;
+    int se = southMax - eastMax;
+    int sw = southMax - westMax;
+
+    int neDiff = abs(ne);
+    int nwDiff = abs(nw);
+    int seDiff = abs(se);
+    int swDiff = abs(sw);
   
     if (neDiff < maxVolDiff && neDiff > westMax && neDiff > southMax) {
         return 1;
@@ -276,201 +271,186 @@ int calculateDirection() {
     }
 }
 
-void changeLED(int dir) {
-    //Assuming LEDs are connected per direction, so 0 1 2 are the north facing LEDs, 3 4 5 the north east facing LEDs, etc.  
-    int max = 0;
-
-    switch (dir) {
-    case 0:
-        if (northMax > (upperBound + 255)) {
-            leds[centralLed] = CRGB(255, 0, 0);
-            loudDetectTime = millis();
-        }
+void setLED(int dir){
+    switch(dir){
+        case 0:
+            firstLED[dir] = 100;
         
-        max = northMax;
-
-        break;
-
-    case 1:
-        if (northMax > (upperBound + 255) || eastMax > (upperBound + 255)) {
-            leds[centralLed] = CRGB(255, 0, 0);
-            loudDetectTime = millis();
-        }
-        
-        if (northMax > eastMax) {
-            max = northMax;
-        } else {
-            max = eastMax;
-        }
-        
-        if (northMax > eastMax) {
-            max = northMax;
-        } else {
-            max = eastMax;
-        }
-
-        break;
-
-    case 2:
-        if (eastMax > (upperBound + 255)) {
-            leds[centralLed] = CRGB(255, 0, 0);
-            loudDetectTime = millis();
-        }
-        
-        max = eastMax;
-
-        max = eastMax;
-
-        break;
-
-    case 3:
-        if (eastMax > (upperBound + 255) || southMax > (upperBound + 255)) {
-            leds[centralLed] = CRGB(255, 0, 0);
-            loudDetectTime = millis();
-        }
-        
-        if (southMax > eastMax) {
-            max = southMax;
-        } else {
-            max = eastMax;
-        }
-        
-        if (southMax > eastMax) {
-            max = southMax;
-        } else {
-            max = eastMax;
-        }
-
-        break;
-
-    case 4:
-        if (southMax > (upperBound + 255)) {
-            leds[centralLed] = CRGB(255, 0, 0);
-            loudDetectTime = millis();
-        }
-        
-        max = southMax;
-
-        break;
-
-    case 5:
-        if (southMax > (upperBound + 255) || westMax > (upperBound + 255)) {
-            leds[centralLed] = CRGB(255, 0, 0);
-            loudDetectTime = millis();
-        }
-        
-        if (southMax > westMax) {
-            max = southMax;
-        } else {
-            max = westMax;
-        }
-        
-        if (southMax > westMax) {
-            max = southMax;
-        } else {
-            max = westMax;
-        }
-
-        break;
-
-    case 6:
-        if (westMax > (upperBound + 255)) {
-            leds[centralLed] = CRGB(255, 0, 0);
-            loudDetectTime = millis();
-        }
-        
-        max = westMax;
-
-        break;
-
-    case 7:
-        if (northMax > (upperBound + 255) || westMax > (upperBound + 255)) {
-            leds[centralLed] = CRGB(255, 0, 0);
-            loudDetectTime = millis();
-        }
-        
-        if (northMax > westMax) {
-            max = northMax;
-        } else {
-            max = westMax;
-        }
-        
-        if (northMax > westMax) {
-            max = northMax;
-        } else {
-            max = westMax;
-        }
-
-        break;
-    
-    default:
-        break;
-    }
-
-<<<<<<< HEAD
-    if (leds[centralLed] == CRGB(255, 0, 0) && abs(time - loudDetectTime) > (onTime * 1000)) {
-        leds[centralLed] = CRGB(0, 0, 0);
-    }
-
-    //Note down the time when we turn on the LED
-    if (dir != -1 && turnedOnTime[dir] == 0) {
-        turnedOnTime[dir] = time;
-    }
-
-    //Check if the lights need to be turned red
-    for (byte i = 0; i < sizeof(turnedOnTime); i++) {
-        if (abs(time - turnedOnTime[i]) > (onTime * 1000)) {
-            for (byte j = 0; j < 3; j++) {
-                leds[i + j] = CRGB(255, 0, 0);
+            if(northMax > 300){
+                secondLED[dir] = 100;
             }
-        }
-    }
-
-    for (byte i = 0; i < sizeof(turnedOnTime); i++) {
-        for (byte j = 0; j < 3; j++) {
-            byte red = leds[i*3 + j].red;
-            byte green = leds[i*3 + j].green;
-            byte blue = leds[i*3 + j].blue;
-
-            red -= 10;
-            green -= 10;
-            blue -=10;
-
-            if (red == 0 && blue == 0 && green == 0) {
-                turnedOnTime[i] = 0;
+        
+            if(northMax > 450) {
+                thirdLED[dir] = 100;
             }
+        
+            break;
+        case 1:
+        	int NE;
+        
+        	if (northMax > eastMax) {
+               	NE  = northMax;
+            } else {
+              	NE = eastMax;
+            }
+        
+            firstLED[dir] = 100;
 
-            leds[i*3 + j] = CRGB(red, green, blue);
+            if (NE > 300) {
+                secondLED[dir] = 100;
+            }
+        
+            if (NE > 450) {
+                thirdLED[dir] = 100;
+            }
+        
+            break;
+        
+        case 2:
+            firstLED[dir] = 100;
+        
+            if (eastMax > 300){
+                secondLED[dir] = 100;
+            }
+        
+            if (eastMax > 450) {
+                thirdLED[dir] = 100;
+            }
+        
+            break;
+        
+        case 3:
+        	int SE;
+        
+        	if (southMax > eastMax) {
+               	SE  = southMax;
+            } else {
+              	SE = eastMax;
+            }
+        
+            firstLED[dir] = 100;
+
+            if (SE > 300) {
+                secondLED[dir] = 100;
+            }
+        
+            if (SE > 450) {
+                thirdLED[dir] = 100;
+            }
+        
+            break;
+        
+        case 4:
+            firstLED[dir] = 100;
+        
+            if (southMax > 300){
+                secondLED[dir] = 100;
+            }
+        
+            if (southMax > 450) {
+                thirdLED[dir] = 100;
+            }
+        
+            break;
+        
+        case 5:
+        	int SW;
+        
+        	if (southMax > westMax) {
+               	SW  = southMax;
+            } else {
+              	SW = westMax;
+            }
+        
+            firstLED[dir] = 100;
+
+            if (SW > 300) {
+                secondLED[dir] = 100;
+            }
+        
+            if (SW > 450) {
+                thirdLED[dir] = 100;
+            }
+        
+            break;
+        
+        case 6:
+            firstLED[dir] = 100;
+        
+            if (westMax > 300){
+                secondLED[dir] = 100;
+            }
+        
+            if (westMax > 450) {
+                thirdLED[dir] = 100;
+            }
+        
+            break;
+        
+         case 7:
+        	int NW;
+        
+        	if (northMax > westMax) {
+               	NW  = northMax;
+            } else {
+              	NW = westMax;
+            }
+        
+            firstLED[dir] = 100;
+
+            if (NW > 300) {
+                secondLED[dir] = 100;
+            }
+        
+            if (NW > 450) {
+                thirdLED[dir] = 100;
+            }
+        
+            break;
+
+        default:
+            break;
+    }
+
+}
+
+void changeLED() {
+    strip.clear();
+    for (byte i = 0; i < sizeof(firstLED); i++) {
+        strip.setPixelColor(i*3, strip.Color(firstLED[i]*2, 0, 0));
+        strip.setPixelColor(i*3 + 1, strip.Color(secondLED[i]*2, 0, 0));
+        strip.setPixelColor(i*3 + 2, strip.Color(thirdLED[i]*2, 0, 0));
+    }
+    
+    for (byte i = 0; i < sizeof(firstLED); i++) {
+        if (firstLED[i] > 0) {
+            firstLED[i] = firstLED[i] - 1;
+        }
+
+        if (secondLED[i] > 0) {
+            secondLED[i] = secondLED[i] - 1;
+        }
+
+        if (thirdLED[i] > 0) {
+            thirdLED[i] = thirdLED[i] - 1;
         }
     }
     
-
-    //Check if lights need to be turned on
-    if (dir != -1) {
-        if (max > lowerBound) {
-            leds[dir*3] = CRGB(0, 0, 255);
-        }
-
-        if (max > (2*255) / 3) {
-            leds[dir*3 + 1] = CRGB(0, 0, 255);
-        }
-    
-        if (max > (4*255) / 3) {
-            leds[dir*3 + 2] = CRGB(0, 0, 255);
-        }
-    }
-
-    FastLED.show(); //Update LEDs
+    strip.show();
 }
 
 void changeMode() {
-    if(abs(pushTime-time) < 500){
+    unsigned long timeDiff = pushTime - time;
+    if (abs(timeDiff) < 500){
         return;
     }
+
     mode++;
-    if(mode >= modes){
+
+    if (mode >= modes){
         mode = 0;
     }
+
     pushTime=millis();
 }
 
@@ -496,8 +476,7 @@ void increase() {
         case 0:
             if (lowerBound != 254) {
                 lowerBound++;
-                settingChanged = mode;
-                
+                settingChanged = true;
             }
 
             break;
@@ -505,7 +484,7 @@ void increase() {
         case 1:
             if (upperBound != 254) {
                 upperBound++;
-                settingChanged = mode;
+              	settingChanged = true;
             }
 
             break;
@@ -513,7 +492,7 @@ void increase() {
         case 2:
             if (soundLength != 254) {
                 soundLength++;
-                settingChanged = mode;
+              	settingChanged = true;
             }
 
             break;
@@ -521,13 +500,12 @@ void increase() {
 }
 
 void decrease() {
-    writeTime = millis();
+    writeTime = wTime + millis();
     switch(mode) {
         case 0:
             if (lowerBound != 0) {
                 lowerBound--;
-                settingChanged = mode;
-                Serial.println(lowerBound);
+                settingChanged = true;
             }
 
             break;
@@ -535,7 +513,7 @@ void decrease() {
         case 1:
             if (upperBound != 0) {
                 upperBound--;
-                settingChanged = mode;
+                settingChanged = true;
             }
 
             break;
@@ -543,7 +521,7 @@ void decrease() {
         case 2:
             if (soundLength != 1) {
                 soundLength--;
-                settingChanged = mode;
+                settingChanged = true;
             }
 
             break;
