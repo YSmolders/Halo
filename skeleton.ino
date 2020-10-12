@@ -137,8 +137,9 @@ void loop() {
     time = millis();
     //Get data from mics
     getMicData();
-
-    if (abs(time - lastPoll) > pollTime){
+    
+    unsigned long pollDiff = time - lastPoll;
+    if (abs(pollDiff) > pollTime){
         //Determine direction
         int dir = calculateDirection();
 
