@@ -276,11 +276,11 @@ void setLED(int dir){
         case 0:
             firstLED[dir] = 100;
         
-            if(northMax > 300){
+            if (northMax > ((upperBound + 255) - lowerBound) / 2){
                 secondLED[dir] = 100;
             }
         
-            if(northMax > 450) {
+            if (northMax > upperBound) {
                 thirdLED[dir] = 100;
             }
         
@@ -296,11 +296,11 @@ void setLED(int dir){
         
             firstLED[dir] = 100;
 
-            if (NE > 300) {
+            if (NE > ((upperBound + 255) - lowerBound) / 2) {
                 secondLED[dir] = 100;
             }
         
-            if (NE > 450) {
+            if (NE > upperBound) {
                 thirdLED[dir] = 100;
             }
         
@@ -309,11 +309,11 @@ void setLED(int dir){
         case 2:
             firstLED[dir] = 100;
         
-            if (eastMax > 300){
+            if (eastMax > ((upperBound + 255) - lowerBound) / 2){
                 secondLED[dir] = 100;
             }
         
-            if (eastMax > 450) {
+            if (eastMax > upperBound) {
                 thirdLED[dir] = 100;
             }
         
@@ -330,11 +330,11 @@ void setLED(int dir){
         
             firstLED[dir] = 100;
 
-            if (SE > 300) {
+            if (SE > ((upperBound + 255) - lowerBound) / 2) {
                 secondLED[dir] = 100;
             }
         
-            if (SE > 450) {
+            if (SE > upperBound) {
                 thirdLED[dir] = 100;
             }
         
@@ -343,11 +343,11 @@ void setLED(int dir){
         case 4:
             firstLED[dir] = 100;
         
-            if (southMax > 300){
+            if (southMax > ((upperBound + 255) - lowerBound) / 2){
                 secondLED[dir] = 100;
             }
         
-            if (southMax > 450) {
+            if (southMax > upperBound) {
                 thirdLED[dir] = 100;
             }
         
@@ -364,11 +364,11 @@ void setLED(int dir){
         
             firstLED[dir] = 100;
 
-            if (SW > 300) {
+            if (SW > ((upperBound + 255) - lowerBound) / 2) {
                 secondLED[dir] = 100;
             }
         
-            if (SW > 450) {
+            if (SW > upperBound) {
                 thirdLED[dir] = 100;
             }
         
@@ -377,11 +377,11 @@ void setLED(int dir){
         case 6:
             firstLED[dir] = 100;
         
-            if (westMax > 300){
+            if (westMax > ((upperBound + 255) - lowerBound) / 2){
                 secondLED[dir] = 100;
             }
         
-            if (westMax > 450) {
+            if (westMax > upperBound) {
                 thirdLED[dir] = 100;
             }
         
@@ -398,11 +398,11 @@ void setLED(int dir){
         
             firstLED[dir] = 100;
 
-            if (NW > 300) {
+            if (NW > ((upperBound + 255) - lowerBound) / 2) {
                 secondLED[dir] = 100;
             }
         
-            if (NW > 450) {
+            if (NW > upperBound) {
                 thirdLED[dir] = 100;
             }
         
@@ -451,7 +451,7 @@ void changeMode() {
         mode = 0;
     }
 
-    pushTime=millis();
+    pushTime = millis();
 }
 
 void checkRotation() {
