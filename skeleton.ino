@@ -26,6 +26,8 @@ int westMax; //Max amplitude detected by the west mic
 int firstLED[NUM_DIR];
 int secondLED[NUM_DIR];
 int thirdLED[NUM_DIR];
+bool loud; //Is there a loud sound?
+byte loudBright; //Current brightness of the "loud" LED
 bool buttonPushed;
 byte lastDir; //Last direction that we output
 bool settingChanged; //Whether (and which) setting has changed. Default value 255, if anything different then nothing has changed
@@ -276,12 +278,21 @@ void setLED(int dir){
         case 0:
             firstLED[dir] = 100;
         
-            if (northMax > ((upperBound + 255) - lowerBound) / 2){
+            if (northMax > ((upperBound + 255) - lowerBound) / 3){
                 secondLED[dir] = 100;
             }
         
-            if (northMax > upperBound) {
+            if (northMax > (((upperBound + 255) - lowerBound)*2) / 3) {
                 thirdLED[dir] = 100;
+            }
+
+            if (northMax > upperBound) {
+                if (!loud) {
+                    loudBright = 100;
+                    loud = true;
+                }
+            } else {
+                loud = false;
             }
         
             break;
@@ -296,12 +307,21 @@ void setLED(int dir){
         
             firstLED[dir] = 100;
 
-            if (NE > ((upperBound + 255) - lowerBound) / 2) {
+            if (NE > ((upperBound + 255) - lowerBound) / 3) {
                 secondLED[dir] = 100;
             }
         
-            if (NE > upperBound) {
+            if (NE > (((upperBound + 255) - lowerBound)*2) / 3) {
                 thirdLED[dir] = 100;
+            }
+
+            if (NE > upperBound) {
+                if (!loud) {
+                    loudBright = 100;
+                    loud = true;
+                }
+            } else {
+                loud = false;
             }
         
             break;
@@ -309,12 +329,21 @@ void setLED(int dir){
         case 2:
             firstLED[dir] = 100;
         
-            if (eastMax > ((upperBound + 255) - lowerBound) / 2){
+            if (eastMax > ((upperBound + 255) - lowerBound) / 3){
                 secondLED[dir] = 100;
             }
         
-            if (eastMax > upperBound) {
+            if (eastMax > (((upperBound + 255) - lowerBound)*2) / 3) {
                 thirdLED[dir] = 100;
+            }
+
+            if (eastMax > upperBound) {
+                if (!loud) {
+                    loudBright = 100;
+                    loud = true;
+                }
+            } else {
+                loud = false;
             }
         
             break;
@@ -330,12 +359,21 @@ void setLED(int dir){
         
             firstLED[dir] = 100;
 
-            if (SE > ((upperBound + 255) - lowerBound) / 2) {
+            if (SE > ((upperBound + 255) - lowerBound) / 3) {
                 secondLED[dir] = 100;
             }
         
-            if (SE > upperBound) {
+            if (SE > (((upperBound + 255) - lowerBound)*2) / 3) {
                 thirdLED[dir] = 100;
+            }
+
+            if (SE > upperBound) {
+                if (!loud) {
+                    loudBright = 100;
+                    loud = true;
+                }
+            } else {
+                loud = false;
             }
         
             break;
@@ -343,12 +381,21 @@ void setLED(int dir){
         case 4:
             firstLED[dir] = 100;
         
-            if (southMax > ((upperBound + 255) - lowerBound) / 2){
+            if (southMax > ((upperBound + 255) - lowerBound) / 3){
                 secondLED[dir] = 100;
             }
         
-            if (southMax > upperBound) {
+            if (southMax > (((upperBound + 255) - lowerBound)*2) / 3) {
                 thirdLED[dir] = 100;
+            }
+
+            if (southMax > upperBound) {
+                if (!loud) {
+                    loudBright = 100;
+                    loud = true;
+                }
+            } else {
+                loud = false;
             }
         
             break;
@@ -364,12 +411,21 @@ void setLED(int dir){
         
             firstLED[dir] = 100;
 
-            if (SW > ((upperBound + 255) - lowerBound) / 2) {
+            if (SW > ((upperBound + 255) - lowerBound) / 3) {
                 secondLED[dir] = 100;
             }
         
-            if (SW > upperBound) {
+            if (SW > (((upperBound + 255) - lowerBound)*2) / 3) {
                 thirdLED[dir] = 100;
+            }
+
+            if (SW > upperBound) {
+                if (!loud) {
+                    loudBright = 100;
+                    loud = true;
+                }
+            } else {
+                loud = false;
             }
         
             break;
@@ -377,12 +433,21 @@ void setLED(int dir){
         case 6:
             firstLED[dir] = 100;
         
-            if (westMax > ((upperBound + 255) - lowerBound) / 2){
+            if (westMax > ((upperBound + 255) - lowerBound) / 3){
                 secondLED[dir] = 100;
             }
         
-            if (westMax > upperBound) {
+            if (westMax > (((upperBound + 255) - lowerBound)*2) / 3) {
                 thirdLED[dir] = 100;
+            }
+
+            if (westMax > upperBound) {
+                if (!loud) {
+                    loudBright = 100;
+                    loud = true;
+                }
+            } else {
+                loud = false;
             }
         
             break;
@@ -398,18 +463,27 @@ void setLED(int dir){
         
             firstLED[dir] = 100;
 
-            if (NW > ((upperBound + 255) - lowerBound) / 2) {
+            if (NW > ((upperBound + 255) - lowerBound) / 3) {
                 secondLED[dir] = 100;
             }
         
-            if (NW > upperBound) {
+            if (NW > (((upperBound + 255) - lowerBound)*2) / 3) {
                 thirdLED[dir] = 100;
+            }
+
+            if (NW > upperBound) {
+                if (!loud) {
+                    loudBright = 100;
+                    loud = true;
+                }
+            } else {
+                loud = false;
             }
         
             break;
 
         default:
-            break;
+            loud = false;
     }
 
 }
@@ -435,6 +509,18 @@ void changeLED() {
             thirdLED[i] = thirdLED[i] - 1;
         }
     }
+
+    double factor = 0.0;
+    if (loud) {
+        if (detectTime == 0) {
+            detectTime = millis();
+        }
+
+        double tmp = sin(2*((millis() / 1000) - (detectTime / 1000)));
+        factor = abs(tmp);
+    }
+
+    strip.setPixelColor(centralLed, 0, 0, loud * factor);
     
     strip.show();
 }
