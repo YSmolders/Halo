@@ -40,7 +40,7 @@ byte soundLength; //In seconds, ranging from 0 to 255
 const short pollTime = 100; //Polltime in milliseconds (ms) with a valid range between 0 and 32,767. Don't go over and don't go negative pls, thanks.
 const short disPollTime = 400; //Time between display updates in ms with a valid range between 0 and 32,767. Don't go over and don't go negative pls, thanks.
 const int wTime = 60000; //Time needed to wait until we want to write something to memory in ms. Valid values range between 0 and 255
-const byte modes = 3; //The number of settings we can change. May not be larger than 255  though so many settings don't fit in memory either. 
+const byte modes = 3; //The number of settings we can change. May not be larger than 255 though as so many settings don't fit in memory either. 
 const byte sensLowerBound = 3; //Address where lower sensitivity bound is stored
 const byte sensUpperBound = 4; //Address where upper sensitivity bound is stored
 const byte soundLengthAdress = 5; //Address where length of sound is stored
@@ -53,6 +53,7 @@ const byte northMic = A0;
 const byte eastMic = A1;
 const byte southMic = A2;
 const byte westMic = A3;
+const byte battery = A4;
 
 const byte rotPinA = 2;
 const byte rotPinB = 3;
@@ -106,6 +107,9 @@ void setup(){
     //pinMode(ledPin, OUTPUT);
     strip.begin(); //Initialise LED strip
     strip.show(); //Turn off all LEDs
+
+    //Initialise battery charge
+    pinMode(battery, INPUT);
 
     //Needed to communicate with pc
     Serial.begin(9600);
@@ -182,18 +186,25 @@ void updateDisplay() {
     lcd.clear();
     switch(mode) {
       case 0:
+        int batteryRaw = analogRead(battery);
+        int batteryPerc = map(batteryRaw, 714, 1023, 0, 100);
+
+        lcd.print("Charge:");
+        lcd.setCursor(0, 1);
+        lcd.print(batteryPerc);
+      case 1:
         lcd.print("Lower Sens:");
         lcd.setCursor(0, 1);
         lcd.print((float)(lowerBound/255.0) * 100);
         
         break;
-      case 1:
+      case 2:
         lcd.print("Upper Sens:");
         lcd.setCursor(0, 1);
         lcd.print((float)(upperBound/255.0) * 100);
         
         break;
-      case 2:
+      case 3:
         lcd.print("Sound Length:");
         lcd.setCursor(0, 1);
         lcd.print(soundLength);
@@ -448,7 +459,7 @@ void changeMode() {
 
     mode++;
 
-    if (mode >= modes){
+    if (mode > modes){
         mode = 0;
     }
 
@@ -474,7 +485,7 @@ void checkRotation() {
 void increase() {
     writeTime = wTime + millis();
     switch(mode) {
-        case 0:
+        case 1:
             if (lowerBound != 254) {
                 lowerBound++;
                 settingChanged = true;
@@ -482,7 +493,7 @@ void increase() {
 
             break;
 
-        case 1:
+        case 2:
             if (upperBound != 254) {
                 upperBound++;
               	settingChanged = true;
@@ -490,12 +501,14 @@ void increase() {
 
             break;
 
-        case 2:
+        case 3:
             if (soundLength != 254) {
                 soundLength++;
               	settingChanged = true;
             }
 
+            break;
+        default:
             break;
     }
 }
@@ -503,7 +516,7 @@ void increase() {
 void decrease() {
     writeTime = wTime + millis();
     switch(mode) {
-        case 0:
+        case 1:
             if (lowerBound != 0) {
                 lowerBound--;
                 settingChanged = true;
@@ -511,7 +524,7 @@ void decrease() {
 
             break;
 
-        case 1:
+        case 2:
             if (upperBound != 0) {
                 upperBound--;
                 settingChanged = true;
@@ -519,12 +532,14 @@ void decrease() {
 
             break;
 
-        case 2:
+        case 3:
             if (soundLength != 1) {
                 soundLength--;
                 settingChanged = true;
             }
 
+            break;
+        default:
             break;
     }
 }
