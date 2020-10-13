@@ -187,7 +187,7 @@ void updateDisplay() {
     switch(mode) {
       case 0:
         int batteryRaw = analogRead(battery);
-        int batteryPerc = map(batteryRaw, 714, 1023, 0, 100);
+        int batteryPerc = map(batteryRaw, 714, 857, 0, 100);
 
         lcd.print("Charge:");
         lcd.setCursor(0, 1);
